@@ -1,6 +1,6 @@
 // Fuel service worker: makes the app open instantly and work offline.
 // Bump VERSION whenever you change the app files.
-const VERSION = 'fuel-v5';
+const VERSION = 'fuel-v6';
 const SHELL = ['./', './index.html', './app.js', './zxing.min.js', './manifest.webmanifest', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', e => {

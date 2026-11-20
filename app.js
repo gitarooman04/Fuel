@@ -613,7 +613,7 @@ function renderSheet() {
       else {
         h += s.mealPhoto
           ? `<div style="position:relative;margin-top:8px"><img class="photo" src="${s.mealPhoto}" alt="Your meal photo"><button class="icon" data-action="meal-photo-clear" aria-label="Remove photo" style="position:absolute;top:6px;right:6px;background:var(--card);border:2px solid var(--ink)">✕</button></div>`
-          : `<button class="btn ghost" data-action="meal-photo" style="margin-top:8px">📸 Take a photo of your meal</button>`;
+          : `<button class="btn ghost" data-action="meal-photo" style="margin-top:8px">📸 Take or choose a meal photo</button>`;
         h += `<textarea id="descText" style="margin-top:8px" placeholder="${s.mealPhoto ? 'Optional details, e.g. about 200 g chicken, cooked in olive oil' : 'Or describe it, e.g. chicken burrito bowl from Guzman y Gomez with guac'}">${esc(s.describeText)}</textarea>
           <button class="btn" data-action="describe" style="margin-top:8px" ${s.busy ? 'disabled' : ''}>${s.busy ? '<span class="spin"></span>' + (s.mealPhoto ? 'Looking at your meal…' : 'Estimating…') : s.describeRes.length ? 'Estimate again' : 'Estimate'}</button>${errHtml()}`;
         if (s.describeRes.length) {
@@ -633,7 +633,7 @@ function renderSheet() {
     h += `<h2><button class="back" data-action="back">‹ Back</button><button class="icon" data-action="close" aria-label="Close">✕</button></h2>
       <p><b>Barcode ${esc(s.code)} isn't in the database yet.</b></p>
       <p class="note">Snap the nutrition panel and Fuel will save it to your foods under this barcode — next time it'll pop up instantly.</p>${errHtml()}
-      <button class="big-btn" data-action="label-photo"><span>📷</span>Photograph the nutrition label</button>
+      <button class="big-btn" data-action="label-photo"><span>📷</span>Photograph or choose the nutrition label</button>
       <button class="btn ghost" data-action="new-food" style="margin-top:10px">Type it in instead</button>`;
   } else if (s.view === 'food') {
     const f = s.food;
