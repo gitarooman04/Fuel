@@ -324,7 +324,9 @@ const Scanner = {
 /* ================= main rendering ================= */
 let toastT;
 function toast(msg) { const t = $('#toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('show'), 2600); }
-const totals = es => es.reduce((t, e) => (t.kcal += num(e.kcal), t.p += num(e.p), t.c += num(e.c), t.f += num(e.f), t), { kcal: 0, p: 0, c: 0, f: 0 });
+// an entry's n is how many of it you had (the + / − buttons); kcal, p, c, f are for one
+const nOf = e => Math.max(1, Math.round(num(e.n) || 1));
+const totals = es => es.reduce((t, e) => { const n = nOf(e); t.kcal += num(e.kcal) * n; t.p += num(e.p) * n; t.c += num(e.c) * n; t.f += num(e.f) * n; return t; }, { kcal: 0, p: 0, c: 0, f: 0 });
 function dateLabel(d) {
   const today = ymd(new Date());
   if (d === today) return 'Today';
@@ -431,7 +433,7 @@ function powerBar(key, val, target) {
 function mealSummary(meal) {
   const es = state.day.entries.filter(e => e.meal === meal);
   const t = totals(es);
-  return { es, kcal: t.kcal, title: !es.length ? '' : es.length === 1 ? es[0].name : theme().items(es.length) };
+  return { es, kcal: t.kcal, title: !es.length ? '' : es.length === 1 ? (nOf(es[0]) > 1 ? `${nOf(es[0])} × ${es[0].name}` : es[0].name) : theme().items(es.length) };
 }
 function compartment(meal, cls) {
   const T = theme(), s = mealSummary(meal), [jp, en] = T.meals[meal];
@@ -656,8 +658,11 @@ function renderSheet() {
     h += `<h2><span>${esc(a)} <span class="note">${en} · ${esc(dateLabel(state.date))}</span></span><button class="icon" data-action="close" aria-label="Close">✕</button></h2>`;
     if (!es.length) h += `<p class="note">Nothing logged yet.</p><button class="btn ghost" data-action="copy-yday" data-meal="${s.meal}">Copy ${s.meal.toLowerCase()} from yesterday</button>`;
     es.forEach(e => {
-      h += `<div class="entry"><div class="nm"><div>${esc(e.name)}</div><div class="mac">${e.amount ? esc(e.amount) + ' · ' : ''}P ${r0(e.p)} · C ${r0(e.c)} · F ${r0(e.f)}</div></div>
-        <div class="kc">${fmt(e.kcal)}</div><button class="icon" data-action="del" data-id="${esc(e.id)}" aria-label="Delete">✕</button></div>`;
+      const n = nOf(e), id = esc(e.id);
+      h += `<div class="entry"><div class="nm"><div>${n > 1 ? `<b>${n} ×</b> ` : ''}${esc(e.name)}</div><div class="mac">${e.amount ? (n > 1 ? `${n} × ` : '') + esc(e.amount) + ' · ' : ''}P ${r0(e.p * n)} · C ${r0(e.c * n)} · F ${r0(e.f * n)}</div></div>
+        <div class="kc">${fmt(e.kcal * n)}</div>
+        <div class="stepper"><button data-action="qty-dec" data-id="${id}" aria-label="One less" ${n <= 1 ? 'disabled' : ''}>−</button><span aria-live="polite">${n}</span><button data-action="qty-inc" data-id="${id}" aria-label="One more">+</button></div>
+        <button class="icon" data-action="del" data-id="${id}" aria-label="Delete">✕</button></div>`;
     });
     if (es.length) h += `<div class="macgrid">${macGrid(t)}</div>`;
     h += `<div class="row" style="margin-top:10px"><button class="btn" data-action="scan">▥ Scan</button><button class="btn ghost" data-action="meal-photo">📸 Snap</button><button class="btn ghost" data-action="meal-add">+ Add</button></div>`;
@@ -920,6 +925,12 @@ document.addEventListener('click', async ev => {
       if (sheet.picking) { sheet.describeText = ''; sheet.describeRes = []; sheet.mealPhoto = null; addIngredients(items.map(({ id, meal, ...rest }) => rest)); break; }
       updateDay(d => ({ ...d, entries: [...d.entries, ...items] }));
       sheet.describeText = ''; sheet.describeRes = []; sheet.mealPhoto = null; closeSheet(); toast(`Added ${items.length} item${items.length > 1 ? 's' : ''}`); break;
+    }
+    case 'qty-inc': case 'qty-dec': {
+      const step = a === 'qty-inc' ? 1 : -1;
+      updateDay(d => ({ ...d, entries: d.entries.map(e => e.id === el.dataset.id ? { ...e, n: Math.max(1, nOf(e) + step) } : e) }));
+      if (sheet.open && sheet.view === 'meal') renderSheet();
+      break;
     }
     case 'del': updateDay(d => ({ ...d, entries: d.entries.filter(e => e.id !== el.dataset.id) })); if (sheet.open && sheet.view === 'meal') renderSheet(); break;
     case 'copy-yday': {
