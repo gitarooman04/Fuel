@@ -659,13 +659,38 @@ function renderSheet() {
     if (!es.length) h += `<p class="note">Nothing logged yet.</p><button class="btn ghost" data-action="copy-yday" data-meal="${s.meal}">Copy ${s.meal.toLowerCase()} from yesterday</button>`;
     es.forEach(e => {
       const n = nOf(e), id = esc(e.id);
-      h += `<div class="entry"><div class="nm"><div>${n > 1 ? `<b>${n} ×</b> ` : ''}${esc(e.name)}</div><div class="mac">${e.amount ? (n > 1 ? `${n} × ` : '') + esc(e.amount) + ' · ' : ''}P ${r0(e.p * n)} · C ${r0(e.c * n)} · F ${r0(e.f * n)}</div></div>
+      h += `<div class="entry"><button class="nm entry-open" data-action="open-entry" data-id="${id}"><div>${n > 1 ? `<b>${n} ×</b> ` : ''}${esc(e.name)} <span class="chev">›</span></div><div class="mac">${e.amount ? (n > 1 ? `${n} × ` : '') + esc(e.amount) + ' · ' : ''}P ${r0(e.p * n)} · C ${r0(e.c * n)} · F ${r0(e.f * n)}</div></button>
         <div class="kc">${fmt(e.kcal * n)}</div>
         <div class="stepper"><button data-action="qty-dec" data-id="${id}" aria-label="One less" ${n <= 1 ? 'disabled' : ''}>−</button><span aria-live="polite">${n}</span><button data-action="qty-inc" data-id="${id}" aria-label="One more">+</button></div>
         <button class="icon" data-action="del" data-id="${id}" aria-label="Delete">✕</button></div>`;
     });
     if (es.length) h += `<div class="macgrid">${macGrid(t)}</div>`;
     h += `<div class="row" style="margin-top:10px"><button class="btn" data-action="scan">▥ Scan</button><button class="btn ghost" data-action="meal-photo">📸 Snap</button><button class="btn ghost" data-action="meal-add">+ Add</button></div>`;
+  } else if (s.view === 'entry') {
+    const e = state.day.entries.find(x => x.id === s.entryId);
+    if (!e) { setView('meal'); return; }
+    const T = theme(), G = state.settings.targets, n = nOf(e), tot = totals([e]), id = esc(e.id);
+    const pct = (v, g) => g ? Math.round((v / g) * 100) : 0;
+    const kcalFrom = { p: tot.p * 4, c: tot.c * 4, f: tot.f * 9 }, kSum = kcalFrom.p + kcalFrom.c + kcalFrom.f || 1;
+    h += `<h2><button class="back" data-action="to-meal">‹ ${esc(T.meals[e.meal][0])}</button><button class="icon" data-action="close" aria-label="Close">✕</button></h2>
+      <div style="font-size:19px;font-weight:900;line-height:1.25">${esc(e.name)}</div>
+      <div class="note" style="margin-top:2px">${n > 1 ? `${n} × ` : ''}${esc(e.amount || '1 serve')}</div>
+      <div class="macgrid">${macGrid(tot)}</div>
+      <div class="card" style="padding:12px 14px">
+        <div class="note" style="font-weight:700;margin-bottom:8px">Share of your daily targets</div>
+        <div class="pbars">${[['kcal', 'Calories', tot.kcal, G.kcal], ['p', T.macros.p[0], tot.p, G.p], ['c', T.macros.c[0], tot.c, G.c], ['f', T.macros.f[0], tot.f, G.f]].map(([k, l, v, g]) =>
+          `<div class="pbar-row"><div class="pbar-lbl">${esc(l)}</div><div class="pbar ${k === 'kcal' ? 'c' : k}"><i style="width:${Math.min(100, pct(v, g))}%"></i></div><div class="pbar-val">${pct(v, g)}%</div></div>`).join('')}</div>
+        <div class="note" style="margin-top:10px">${(() => {
+          const base = Math.max(tot.kcal, kSum), other = Math.max(0, tot.kcal - kSum), pc = v => Math.round(v / base * 100);
+          return `Calories from protein ${pc(kcalFrom.p)}% · carbs ${pc(kcalFrom.c)}% · fat ${pc(kcalFrom.f)}%` + (pc(other) >= 10 ? ` · other ${pc(other)}% (e.g. alcohol or fibre)` : '');
+        })()}</div>
+      </div>
+      ${n > 1 ? `<p class="note" style="margin-top:-4px">Each one: ${fmt(e.kcal)} kcal · P ${r1(e.p)} g · C ${r1(e.c)} g · F ${r1(e.f)} g</p>` : ''}
+      <div style="display:flex;align-items:center;gap:12px;margin:6px 0 12px"><b style="flex:1">How many</b>
+        <div class="stepper"><button data-action="qty-dec" data-id="${id}" aria-label="One less" ${n <= 1 ? 'disabled' : ''}>−</button><span aria-live="polite">${n}</span><button data-action="qty-inc" data-id="${id}" aria-label="One more">+</button></div></div>
+      <div class="note" style="font-weight:700;margin-bottom:6px">Move to</div>
+      <div class="seg">${MEALS.map(m => `<button data-action="move-entry" data-id="${id}" data-meal="${m}" class="${e.meal === m ? 'on' : ''}">${esc(T.meals[m][0])}</button>`).join('')}</div>
+      <button class="btn ghost" data-action="del-entry" data-id="${id}" style="color:var(--over)">Remove from ${esc(e.meal.toLowerCase())}</button>`;
   } else if (s.view === 'recipe') {
     const r = s.recipe, ing = r.ingredients || [];
     h += `<h2><span>${r.key ? 'Edit recipe' : 'New recipe'}</span><button class="icon" data-action="close" aria-label="Close">✕</button></h2>${errHtml()}
@@ -941,10 +966,18 @@ document.addEventListener('click', async ev => {
       updateDay(d => ({ ...d, entries: [...d.entries, ...items] }));
       sheet.describeText = ''; sheet.describeRes = []; sheet.mealPhoto = null; closeSheet(); toast(`Added ${items.length} item${items.length > 1 ? 's' : ''}`); break;
     }
+    case 'open-entry': setView('entry', { entryId: el.dataset.id }); break;
+    case 'to-meal': setView('meal'); break;
+    case 'move-entry': {
+      const to = el.dataset.meal;
+      updateDay(d => ({ ...d, entries: d.entries.map(e => e.id === el.dataset.id ? { ...e, meal: to } : e) }));
+      sheet.meal = to; renderSheet(); toast(`Moved to ${to.toLowerCase()}`); break;
+    }
+    case 'del-entry': updateDay(d => ({ ...d, entries: d.entries.filter(e => e.id !== el.dataset.id) })); setView('meal'); toast('Removed'); break;
     case 'qty-inc': case 'qty-dec': {
       const step = a === 'qty-inc' ? 1 : -1;
       updateDay(d => ({ ...d, entries: d.entries.map(e => e.id === el.dataset.id ? { ...e, n: Math.max(1, nOf(e) + step) } : e) }));
-      if (sheet.open && sheet.view === 'meal') renderSheet();
+      if (sheet.open && (sheet.view === 'meal' || sheet.view === 'entry')) renderSheet();
       break;
     }
     case 'del': updateDay(d => ({ ...d, entries: d.entries.filter(e => e.id !== el.dataset.id) })); if (sheet.open && sheet.view === 'meal') renderSheet(); break;
