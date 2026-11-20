@@ -180,6 +180,10 @@ textarea{min-height:84px;resize:vertical}
 .scanner .bottom{position:absolute;left:0;right:0;bottom:0;z-index:2;padding:16px 16px calc(env(safe-area-inset-bottom) + 18px);display:flex;gap:8px}
 .scanner .bottom input{background:rgba(255,255,255,.95);color:#111;border:none}
 .scanner .bottom button{border:none;background:#fff;color:#111;border-radius:10px;padding:0 16px;font-weight:900}
+.picker{position:fixed;inset:0;z-index:15;display:flex;align-items:flex-end;justify-content:center}
+.picker.hidden{display:none}
+.picker-panel{position:relative;width:100%;max-width:600px;background:var(--bg);border-top:2.5px solid var(--ink);border-radius:22px 22px 0 0;padding:18px 16px calc(env(safe-area-inset-bottom) + 18px)}
+.picker-title{font-weight:900;font-size:17px;text-align:center;margin-bottom:12px}
 .hidden-input{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
 .copybox{width:100%;margin-top:8px;font-size:13px}
 </style>
@@ -213,6 +217,17 @@ textarea{min-height:84px;resize:vertical}
 </div>
 
 <input type="file" accept="image/*" id="labelInput" class="hidden-input">
+<input type="file" accept="image/*" capture="environment" id="labelCamInput" class="hidden-input">
+<input type="file" accept="image/*" capture="environment" id="mealCamInput" class="hidden-input">
+<div class="picker hidden" id="picker" role="dialog" aria-modal="true" aria-labelledby="pickerTitle">
+  <div class="sheet-bg" data-action="pick-cancel"></div>
+  <div class="picker-panel">
+    <div id="pickerTitle" class="picker-title">Photo</div>
+    <button class="btn" data-action="pick-cam">📸 Take photo</button>
+    <button class="btn ghost" data-action="pick-lib">🖼 Choose from library</button>
+    <button class="link" data-action="pick-cancel" style="display:block;margin:10px auto 0">Cancel</button>
+  </div>
+</div>
 <input type="file" accept="image/*" id="mealPhotoInput" class="hidden-input">
 <input type="file" accept="image/*" id="barcodePhotoInput" class="hidden-input">
 <input type="file" accept="application/json,.json" id="importInput" class="hidden-input">

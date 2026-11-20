@@ -833,6 +833,16 @@ async function handleMealPhoto(file) {
   await runEstimate();
 }
 
+// Camera vs library: some Android phones (e.g. Samsung, Android 14+) open a gallery-only picker
+// for a plain photo input, so we ask first and use a camera input (capture) when wanted.
+let pickerFor = 'meal';
+function openPicker(kind) {
+  pickerFor = kind;
+  $('#pickerTitle').textContent = kind === 'label' ? 'Nutrition label photo' : 'Meal photo';
+  $('#picker').classList.remove('hidden');
+}
+function closePicker() { $('#picker').classList.add('hidden'); }
+
 /* ================= events ================= */
 function setDate(d) { state.date = d; state.day = loadDay(d); render(); }
 
@@ -851,7 +861,12 @@ document.addEventListener('click', async ev => {
     case 'stab': sheet.tab = el.dataset.stab; sheet.error = ''; renderSheet(); break;
     case 'scan': Scanner.open(code => handleCode(code)); break;
     case 'scan-cancel': Scanner.close(); break;
-    case 'label-photo': if (!sheet.open) openSheet(); $('#labelInput').value = ''; $('#labelInput').click(); break;
+    case 'label-photo': if (!sheet.open) openSheet(); openPicker('label'); break;
+    case 'pick-cam': case 'pick-lib': {
+      const id = { label: { cam: 'labelCamInput', lib: 'labelInput' }, meal: { cam: 'mealCamInput', lib: 'mealPhotoInput' } }[pickerFor][a === 'pick-cam' ? 'cam' : 'lib'];
+      closePicker(); const inp = document.getElementById(id); inp.value = ''; inp.click(); break;
+    }
+    case 'pick-cancel': closePicker(); break;
     case 'pick-food': { const f = state.foods[el.dataset.key]; if (f) showFood(f, 'tabs'); break; }
     case 'pick-result': { const f = sheet.results[+el.dataset.i]; if (f) showFood(state.foods[f.key] || f, 'tabs'); break; }
     case 'amode': {
@@ -915,7 +930,7 @@ document.addEventListener('click', async ev => {
       if (!sheet.describeText.trim() && !sheet.mealPhoto) { sheet.error = 'Take a photo or describe what you ate first.'; renderSheet(); return; }
       await runEstimate(); break;
     }
-    case 'meal-photo': if (!sheet.open) openSheet(); $('#mealPhotoInput').value = ''; $('#mealPhotoInput').click(); break;
+    case 'meal-photo': if (!sheet.open) openSheet(); openPicker('meal'); break;
     case 'meal-photo-clear': { const t = $('#descText'); sheet.describeText = t ? t.value : ''; sheet.mealPhoto = null; sheet.describeRes = []; renderSheet(); break; }
     case 'describe-add': {
       const items = $$('[data-dr]').filter(r => r.querySelector('.drk').checked).map(r => ({
@@ -1024,8 +1039,8 @@ document.addEventListener('change', async ev => {
     const w = t.value === '' ? null : r1(num(t.value));
     updateDay(d => ({ ...d, weight: w })); toast(w ? `Weight ${w} kg saved` : 'Weight cleared');
   }
-  if (t.id === 'labelInput') handleLabelFile(t.files && t.files[0]);
-  if (t.id === 'mealPhotoInput') handleMealPhoto(t.files && t.files[0]);
+  if (t.id === 'labelInput' || t.id === 'labelCamInput') handleLabelFile(t.files && t.files[0]);
+  if (t.id === 'mealPhotoInput' || t.id === 'mealCamInput') handleMealPhoto(t.files && t.files[0]);
   if (t.id === 'importInput' && t.files && t.files[0]) {
     try {
       const j = JSON.parse(await t.files[0].text());
