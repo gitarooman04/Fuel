@@ -5,6 +5,7 @@ Fuel is a personal calorie and macro tracker that you install on your phone like
 - **Scan a barcode with your camera.** Fuel checks *your own food library* first, which is instant and works offline. If the barcode isn't there, it looks it up in **Open Food Facts**, a free, open food database.
 - **Barcode not found?** Photograph the nutrition panel and Claude reads the numbers. You check them, and Fuel saves the food under that barcode. The next time you scan it, it's recognised instantly.
 - **Other ways to add food:** search Open Food Facts by name, pick from your library, quick-add calories, or describe a meal in plain words.
+- **Meal photos:** snap your plate (📸 Meal) and Claude estimates each item's calories and macros. You can add notes such as "cooked in olive oil", then check the numbers before adding. This needs the API key.
 - **Recipes:** build a recipe from any foods, whether scanned, searched, from your library or typed in. Say how many serves it makes. Optionally weigh the whole pot after cooking, and you can log any portion by grams. Recipes are saved in My foods and logged like any other food.
 - **Two themes** (Settings → Theme):
   - **Bento:** Japanese style with an onigiri mascot. Your meals sit in the compartments of a lacquered bento box.

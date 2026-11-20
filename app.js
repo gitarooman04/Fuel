@@ -192,11 +192,21 @@ async function readLabel(dataUrl) {
   const fix = m => m && hasM(m) ? { kcal: num(m.kcal), p: num(m.p), c: num(m.c), f: num(m.f) } : null;
   return { name: v.name || '', brand: v.brand || '', servingG: numOrNull(v.servingG), servingLabel: v.servingLabel || '', perServe: fix(v.perServe), per100: fix(v.per100) };
 }
-async function describeMeal(text) {
-  const v = await askClaude([{ type: 'text', text: `Estimate calories and macros for the food below, for a user in Australia. Split it into separate items. Use typical Australian serving sizes, and real product values when a brand is named. If no amount is given assume one typical serving and put the amount in the name.
-Respond with ONLY JSON: {"items":[{"name":"short name with amount","kcal":0,"p":0,"c":0,"f":0}]} (p, c, f in grams, whole numbers).
+async function describeMeal(text, photo) {
+  const content = [];
+  if (photo) {
+    const [meta, data] = photo.split(',');
+    content.push({ type: 'image', source: { type: 'base64', media_type: (meta.match(/data:(.*?);/) || [])[1] || 'image/jpeg', data } });
+  }
+  content.push({ type: 'text', text: (photo
+    ? `This is a photo of a meal a user in Australia is about to eat. Identify each separate food or drink you can see and estimate its portion from visual cues (a standard dinner plate is about 27 cm across; a fork about 19 cm). Account for visible oils, sauces and dressings. Use the user's notes below to correct or add detail — they override what you guess from the photo.`
+    : `Estimate calories and macros for the food below, for a user in Australia. Split it into separate items. Use typical Australian serving sizes, and real product values when a brand is named. If no amount is given assume one typical serving.`) + `
+Put your estimated amount in each item's name (e.g. "Rice, white, about 1 cup (180 g)").
+Respond with ONLY JSON: {"items":[{"name":"short name with amount","kcal":0,"p":0,"c":0,"f":0}]} (p, c, f in grams, whole numbers). If the photo shows no food, respond {"items":[]}.
 
-Food: ${text}` }]);
+${photo ? 'Notes from the user' : 'Food'}: ${text || '(none)'}` });
+  const v = await askClaude(content);
+  if (photo && !(v.items || []).length) throw new Error("Couldn't spot any food in that photo — try again from a bit higher up, with the whole plate in view.");
   return (v.items || []).map(x => ({ name: String(x.name || 'Food'), kcal: num(x.kcal), p: num(x.p), c: num(x.c), f: num(x.f) }));
 }
 
@@ -560,7 +570,7 @@ function renderSettings() {
 let sheet = { open: false, view: 'tabs', tab: 'foods', meal: defaultMeal(), filter: '', results: [], busy: false, error: '', food: null, mode: 'serves', amt: 1, draft: null, photo: null, code: null, describeText: '', describeRes: [], auOnly: true, q: '' };
 
 function openSheet(opts = {}) {
-  sheet = { ...sheet, open: true, view: 'tabs', error: '', busy: false, fromFoodsTab: false, picking: false, ...opts };
+  sheet = { ...sheet, open: true, view: 'tabs', error: '', busy: false, fromFoodsTab: false, picking: false, mealPhoto: null, ...opts };
   if (!opts.meal) sheet.meal = sheet.meal || defaultMeal();
   $('#sheet').classList.remove('hidden');
   renderSheet();
@@ -581,7 +591,7 @@ function renderSheet() {
     h += `
       <div class="seg">${[['foods', 'My foods'], ['search', 'Search'], ['quick', 'Quick add']].map(([k, l]) => `<button data-action="stab" data-stab="${k}" class="${s.tab === k ? 'on' : ''}">${l}</button>`).join('')}</div>`;
     if (s.tab === 'foods') {
-      h += `<div class="row" style="margin-bottom:10px"><button class="btn" data-action="scan">▥ Scan barcode</button><button class="btn ghost" data-action="label-photo">📷 Label photo</button></div>
+      h += `<div class="row" style="margin-bottom:10px"><button class="btn" data-action="scan">▥ Scan</button><button class="btn ghost" data-action="label-photo">📷 Label</button><button class="btn ghost" data-action="meal-photo">📸 Meal</button></div>
         ${s.picking ? '' : `<button class="link" data-action="new-recipe" style="margin:-2px 0 6px">🍲 Create a recipe</button>`}
         <input id="sheetFilter" placeholder="Search my foods" value="${esc(s.filter)}">`;
       const list = sortedFoods(s.filter);
@@ -598,11 +608,14 @@ function renderSheet() {
         <div class="row"><label class="f">kcal<input id="qK" type="number" inputmode="decimal"></label><label class="f">Protein g<input id="qP" type="number" inputmode="decimal"></label><label class="f">Carbs g<input id="qC" type="number" inputmode="decimal"></label><label class="f">Fat g<input id="qF" type="number" inputmode="decimal"></label></div>
         <button class="btn" data-action="quick-add">${addLabel()}</button>
         <button class="btn ghost" data-action="new-food">Create a reusable food…</button>`;
-      h += `<div style="margin-top:18px"><b>✨ Describe it</b>`;
-      if (!state.settings.apiKey) h += `<p class="note">Add a Claude API key in Settings to estimate meals from a description.</p>`;
+      h += `<div style="margin-top:18px" id="aiEst"><b>✨ Snap or describe a meal</b>`;
+      if (!state.settings.apiKey) h += `<p class="note">Add a Claude API key in Settings to estimate meals from a photo or a description.</p>`;
       else {
-        h += `<textarea id="descText" style="margin-top:8px" placeholder="e.g. chicken burrito bowl from Guzman y Gomez with guac">${esc(s.describeText)}</textarea>
-          <button class="btn" data-action="describe" style="margin-top:8px" ${s.busy ? 'disabled' : ''}>${s.busy ? '<span class="spin"></span>Estimating…' : 'Estimate'}</button>${errHtml()}`;
+        h += s.mealPhoto
+          ? `<div style="position:relative;margin-top:8px"><img class="photo" src="${s.mealPhoto}" alt="Your meal photo"><button class="icon" data-action="meal-photo-clear" aria-label="Remove photo" style="position:absolute;top:6px;right:6px;background:var(--card);border:2px solid var(--ink)">✕</button></div>`
+          : `<button class="btn ghost" data-action="meal-photo" style="margin-top:8px">📸 Take a photo of your meal</button>`;
+        h += `<textarea id="descText" style="margin-top:8px" placeholder="${s.mealPhoto ? 'Optional details, e.g. about 200 g chicken, cooked in olive oil' : 'Or describe it, e.g. chicken burrito bowl from Guzman y Gomez with guac'}">${esc(s.describeText)}</textarea>
+          <button class="btn" data-action="describe" style="margin-top:8px" ${s.busy ? 'disabled' : ''}>${s.busy ? '<span class="spin"></span>' + (s.mealPhoto ? 'Looking at your meal…' : 'Estimating…') : s.describeRes.length ? 'Estimate again' : 'Estimate'}</button>${errHtml()}`;
         if (s.describeRes.length) {
           s.describeRes.forEach((r, i) => {
             h += `<div class="card" style="padding:10px;margin:10px 0 0" data-dr="${i}"><div style="display:flex;gap:8px;align-items:center;margin-bottom:6px"><input type="checkbox" class="drk" checked style="width:20px;height:20px;flex:none"><input class="drn" value="${esc(r.name)}"></div>
@@ -647,7 +660,7 @@ function renderSheet() {
         <div class="kc">${fmt(e.kcal)}</div><button class="icon" data-action="del" data-id="${esc(e.id)}" aria-label="Delete">✕</button></div>`;
     });
     if (es.length) h += `<div class="macgrid">${macGrid(t)}</div>`;
-    h += `<div class="row" style="margin-top:10px"><button class="btn" data-action="scan">▥ Scan</button><button class="btn ghost" data-action="meal-add">+ Add food</button></div>`;
+    h += `<div class="row" style="margin-top:10px"><button class="btn" data-action="scan">▥ Scan</button><button class="btn ghost" data-action="meal-photo">📸 Snap</button><button class="btn ghost" data-action="meal-add">+ Add</button></div>`;
   } else if (s.view === 'recipe') {
     const r = s.recipe, ing = r.ingredients || [];
     h += `<h2><span>${r.key ? 'Edit recipe' : 'New recipe'}</span><button class="icon" data-action="close" aria-label="Close">✕</button></h2>${errHtml()}
@@ -798,6 +811,23 @@ function logFood() {
   closeSheet(); toast(`Added ${fmt(m.kcal)} kcal to ${sheet.meal.toLowerCase()}`);
 }
 
+async function runEstimate() {
+  sheet.busy = true; sheet.error = ''; sheet.describeRes = []; renderSheet();
+  try { sheet.describeRes = await describeMeal(sheet.describeText.trim(), sheet.mealPhoto); } catch (e) { sheet.error = e.message; }
+  sheet.busy = false;
+  if (sheet.open) { renderSheet(); const a = $('#aiEst'); if (a) a.scrollIntoView({ block: 'start' }); }
+}
+async function handleMealPhoto(file) {
+  if (!file) return;
+  if (!state.settings.apiKey) { toast('Add your Claude API key in Settings first'); return; }
+  let canvas;
+  try { canvas = await fileToCanvas(file, 1280); } catch (e) { toast(e.message); return; }
+  if (!sheet.open) openSheet();
+  sheet.mealPhoto = canvas.toDataURL('image/jpeg', 0.82);
+  sheet.describeText = ''; sheet.view = 'tabs'; sheet.tab = 'quick';
+  await runEstimate();
+}
+
 /* ================= events ================= */
 function setDate(d) { state.date = d; state.day = loadDay(d); render(); }
 
@@ -877,19 +907,19 @@ document.addEventListener('click', async ev => {
     }
     case 'describe': {
       const t = $('#descText'); sheet.describeText = t ? t.value : '';
-      if (!sheet.describeText.trim()) { sheet.error = 'Describe what you ate first.'; renderSheet(); return; }
-      sheet.busy = true; sheet.error = ''; sheet.describeRes = []; renderSheet();
-      try { sheet.describeRes = await describeMeal(sheet.describeText.trim()); } catch (e) { sheet.error = e.message; }
-      sheet.busy = false; if (sheet.open) renderSheet(); break;
+      if (!sheet.describeText.trim() && !sheet.mealPhoto) { sheet.error = 'Take a photo or describe what you ate first.'; renderSheet(); return; }
+      await runEstimate(); break;
     }
+    case 'meal-photo': if (!sheet.open) openSheet(); $('#mealPhotoInput').value = ''; $('#mealPhotoInput').click(); break;
+    case 'meal-photo-clear': { const t = $('#descText'); sheet.describeText = t ? t.value : ''; sheet.mealPhoto = null; sheet.describeRes = []; renderSheet(); break; }
     case 'describe-add': {
       const items = $$('[data-dr]').filter(r => r.querySelector('.drk').checked).map(r => ({
         id: uid(), meal: sheet.meal, name: r.querySelector('.drn').value.trim() || 'Food',
         kcal: num(r.querySelector('.drkc').value), p: num(r.querySelector('.drp').value), c: num(r.querySelector('.drc').value), f: num(r.querySelector('.drf').value) }));
       if (!items.length) return toast('Nothing selected');
-      if (sheet.picking) { sheet.describeText = ''; sheet.describeRes = []; addIngredients(items.map(({ id, meal, ...rest }) => rest)); break; }
+      if (sheet.picking) { sheet.describeText = ''; sheet.describeRes = []; sheet.mealPhoto = null; addIngredients(items.map(({ id, meal, ...rest }) => rest)); break; }
       updateDay(d => ({ ...d, entries: [...d.entries, ...items] }));
-      sheet.describeText = ''; sheet.describeRes = []; closeSheet(); toast(`Added ${items.length} item${items.length > 1 ? 's' : ''}`); break;
+      sheet.describeText = ''; sheet.describeRes = []; sheet.mealPhoto = null; closeSheet(); toast(`Added ${items.length} item${items.length > 1 ? 's' : ''}`); break;
     }
     case 'del': updateDay(d => ({ ...d, entries: d.entries.filter(e => e.id !== el.dataset.id) })); if (sheet.open && sheet.view === 'meal') renderSheet(); break;
     case 'copy-yday': {
@@ -984,6 +1014,7 @@ document.addEventListener('change', async ev => {
     updateDay(d => ({ ...d, weight: w })); toast(w ? `Weight ${w} kg saved` : 'Weight cleared');
   }
   if (t.id === 'labelInput') handleLabelFile(t.files && t.files[0]);
+  if (t.id === 'mealPhotoInput') handleMealPhoto(t.files && t.files[0]);
   if (t.id === 'importInput' && t.files && t.files[0]) {
     try {
       const j = JSON.parse(await t.files[0].text());
