@@ -669,15 +669,15 @@ function renderSheet() {
   } else if (s.view === 'entry') {
     const e = state.day.entries.find(x => x.id === s.entryId);
     if (!e) { setView('meal'); return; }
-    const T = theme(), G = state.settings.targets, n = nOf(e), tot = totals([e]), id = esc(e.id);
+    const T = theme(), G = state.settings.targets, n = nOf(e), tot = totals([{ ...e, n: 1 }]), all = totals([e]), id = esc(e.id);
     const pct = (v, g) => g ? Math.round((v / g) * 100) : 0;
     const kcalFrom = { p: tot.p * 4, c: tot.c * 4, f: tot.f * 9 }, kSum = kcalFrom.p + kcalFrom.c + kcalFrom.f || 1;
     h += `<h2><button class="back" data-action="to-meal">‹ ${esc(T.meals[e.meal][0])}</button><button class="icon" data-action="close" aria-label="Close">✕</button></h2>
       <div style="font-size:19px;font-weight:900;line-height:1.25">${esc(e.name)}</div>
-      <div class="note" style="margin-top:2px">${n > 1 ? `${n} × ` : ''}${esc(e.amount || '1 serve')}</div>
+      <div class="note" style="margin-top:2px">Per ${esc(e.amount || '1 serve')}${n > 1 ? ` · you had ${n}` : ''}</div>
       <div class="macgrid">${macGrid(tot)}</div>
       <div class="card" style="padding:12px 14px">
-        <div class="note" style="font-weight:700;margin-bottom:8px">Share of your daily targets</div>
+        <div class="note" style="font-weight:700;margin-bottom:8px">One serve as a share of your daily targets</div>
         <div class="pbars">${[['kcal', 'Calories', tot.kcal, G.kcal], ['p', T.macros.p[0], tot.p, G.p], ['c', T.macros.c[0], tot.c, G.c], ['f', T.macros.f[0], tot.f, G.f]].map(([k, l, v, g]) =>
           `<div class="pbar-row"><div class="pbar-lbl">${esc(l)}</div><div class="pbar ${k === 'kcal' ? 'c' : k}"><i style="width:${Math.min(100, pct(v, g))}%"></i></div><div class="pbar-val">${pct(v, g)}%</div></div>`).join('')}</div>
         <div class="note" style="margin-top:10px">${(() => {
@@ -685,7 +685,7 @@ function renderSheet() {
           return `Calories from protein ${pc(kcalFrom.p)}% · carbs ${pc(kcalFrom.c)}% · fat ${pc(kcalFrom.f)}%` + (pc(other) >= 10 ? ` · other ${pc(other)}% (e.g. alcohol or fibre)` : '');
         })()}</div>
       </div>
-      ${n > 1 ? `<p class="note" style="margin-top:-4px">Each one: ${fmt(e.kcal)} kcal · P ${r1(e.p)} g · C ${r1(e.c)} g · F ${r1(e.f)} g</p>` : ''}
+      ${n > 1 ? `<p class="note" style="margin-top:-4px"><b>All ${n} together:</b> ${fmt(all.kcal)} kcal · P ${r1(all.p)} g · C ${r1(all.c)} g · F ${r1(all.f)} g</p>` : ''}
       <div style="display:flex;align-items:center;gap:12px;margin:6px 0 12px"><b style="flex:1">How many</b>
         <div class="stepper"><button data-action="qty-dec" data-id="${id}" aria-label="One less" ${n <= 1 ? 'disabled' : ''}>−</button><span aria-live="polite">${n}</span><button data-action="qty-inc" data-id="${id}" aria-label="One more">+</button></div></div>
       <div class="note" style="font-weight:700;margin-bottom:6px">Move to</div>
