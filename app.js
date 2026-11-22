@@ -519,23 +519,30 @@ function renderWeek() {
   return h;
 }
 
+const isRecipe = f => f.source === 'recipe';
 function foodSub(f) {
+  if (isRecipe(f)) return [hasM(f.perServe) ? `${fmt(f.perServe.kcal)} kcal / serve` : '', f.servings ? `makes ${r1(f.servings)}` : '', f.cookedG ? 'log by serve or grams' : ''].filter(Boolean).join(' · ');
   const base = hasM(f.perServe) ? `${fmt(f.perServe.kcal)} kcal / serve` : hasM(f.per100) ? `${fmt(f.per100.kcal)} kcal / 100g` : '';
   return [f.source === 'recipe' ? '🍲 Recipe' : f.brand, base, f.code ? '▥' : ''].filter(Boolean).join(' · ');
 }
-function sortedFoods(filter) {
+function sortedFoods(filter, kind) {
   const q = (filter || '').toLowerCase().trim();
   return Object.values(state.foods)
+    .filter(f => !kind || (kind === 'recipes') === isRecipe(f))
     .filter(f => !q || (f.name + ' ' + (f.brand || '') + ' ' + (f.code || '')).toLowerCase().includes(q))
     .sort((a, b) => (b.lastUsed || 0) - (a.lastUsed || 0) || (b.uses || 0) - (a.uses || 0) || a.name.localeCompare(b.name));
 }
 function renderFoodsTab() {
-  const list = sortedFoods(state.foodsFilter);
-  let h = `<div class="card"><b>My foods</b> <span class="pill">${Object.keys(state.foods).length}</span>
-    <p class="note">Everything you scan, photograph or save lands here. Scanned barcodes are recognised instantly next time, even offline.</p>
-    <button class="btn ghost" data-action="new-recipe" style="margin-bottom:10px">🍲 New recipe</button>
-    <input id="foodsTabFilter" placeholder="Search my foods" value="${esc(state.foodsFilter || '')}">`;
-  if (!list.length) h += `<p class="note">${Object.keys(state.foods).length ? 'No matches.' : 'Nothing yet — scan something!'}</p>`;
+  const kind = state.foodsKind || 'foods', all = Object.values(state.foods);
+  const nRec = all.filter(isRecipe).length, nFood = all.length - nRec;
+  const list = sortedFoods(state.foodsFilter, kind);
+  let h = `<div class="seg"><button data-action="fkind" data-kind="foods" class="${kind === 'foods' ? 'on' : ''}">Foods <span class="pill">${nFood}</span></button><button data-action="fkind" data-kind="recipes" class="${kind === 'recipes' ? 'on' : ''}">🍲 Recipes <span class="pill">${nRec}</span></button></div>
+    <div class="card">`;
+  h += kind === 'recipes'
+    ? `<p class="note" style="margin-top:0">Your own recipes. Tap ✎ to change ingredients or serves.</p><button class="btn" data-action="new-recipe" style="margin-bottom:10px">🍲 New recipe</button>`
+    : `<p class="note" style="margin-top:0">Everything you scan, photograph or save. Scanned barcodes are recognised instantly next time, even offline.</p>`;
+  h += `<input id="foodsTabFilter" placeholder="Search ${kind === 'recipes' ? 'recipes' : 'foods'}" value="${esc(state.foodsFilter || '')}">`;
+  if (!list.length) h += `<p class="note">${state.foodsFilter ? 'No matches.' : kind === 'recipes' ? 'No recipes yet — tap New recipe to make one.' : 'Nothing yet — scan something!'}</p>`;
   list.slice(0, 200).forEach(f => {
     h += `<div class="entry"><div class="nm"><div>${esc(f.name)}</div><div class="mac">${esc(foodSub(f))}</div></div>
       <button class="icon" data-action="edit-food" data-key="${esc(f.key)}" aria-label="Edit">✎</button>
@@ -591,14 +598,19 @@ function renderSheet() {
       ? `<h2><button class="back" data-action="to-recipe">‹ Recipe</button><span>Add ingredient</span><button class="icon" data-action="close" aria-label="Close">✕</button></h2>`
       : `<h2>Add food <button class="icon" data-action="close" aria-label="Close">✕</button></h2>${mealSeg()}`;
     h += `
-      <div class="seg">${[['foods', 'My foods'], ['search', 'Search'], ['quick', 'Quick add']].map(([k, l]) => `<button data-action="stab" data-stab="${k}" class="${s.tab === k ? 'on' : ''}">${l}</button>`).join('')}</div>`;
+      <div class="seg">${[['foods', 'My foods'], ['recipes', 'Recipes'], ['search', 'Search'], ['quick', 'Quick add']].map(([k, l]) => `<button data-action="stab" data-stab="${k}" class="${s.tab === k ? 'on' : ''}">${l}</button>`).join('')}</div>`;
     if (s.tab === 'foods') {
       h += `<div class="row" style="margin-bottom:10px"><button class="btn" data-action="scan">▥ Scan</button><button class="btn ghost" data-action="label-photo">📷 Label</button><button class="btn ghost" data-action="meal-photo">📸 Meal</button></div>
-        ${s.picking ? '' : `<button class="link" data-action="new-recipe" style="margin:-2px 0 6px">🍲 Create a recipe</button>`}
         <input id="sheetFilter" placeholder="Search my foods" value="${esc(s.filter)}">`;
-      const list = sortedFoods(s.filter);
-      if (!list.length) h += `<p class="note">${Object.keys(state.foods).length ? 'No matches — try the Search tab.' : 'Your library is empty. Scan a barcode or photograph a label to start it.'}</p>`;
+      const list = sortedFoods(s.filter, 'foods');
+      if (!list.length) h += `<p class="note">${s.filter ? 'No matches — try the Search tab.' : 'Your library is empty. Scan a barcode or photograph a label to start it.'}</p>`;
       list.slice(0, 60).forEach(f => { h += `<button class="item" data-action="pick-food" data-key="${esc(f.key)}"><div class="nm"><div>${esc(f.name)}</div><div class="mac">${esc(foodSub(f))}</div></div><span class="chev">›</span></button>`; });
+    } else if (s.tab === 'recipes') {
+      h += `${s.picking ? '' : `<button class="btn ghost" data-action="new-recipe" style="margin-bottom:10px">🍲 New recipe</button>`}
+        <input id="recipeFilter" placeholder="Search recipes" value="${esc(s.rfilter || '')}">`;
+      const list = sortedFoods(s.rfilter, 'recipes');
+      if (!list.length) h += `<p class="note">${s.rfilter ? 'No matches.' : 'No recipes yet. Tap New recipe to build one from your foods — it’s saved here for one-tap logging.'}</p>`;
+      list.slice(0, 60).forEach(f => { h += `<button class="item" data-action="pick-food" data-key="${esc(f.key)}"><div class="nm"><div>🍲 ${esc(f.name)}</div><div class="mac">${esc(foodSub(f))}</div></div><span class="chev">›</span></button>`; });
     } else if (s.tab === 'search') {
       h += `<form id="searchForm" class="row" style="margin-bottom:6px"><input id="searchQ" placeholder="e.g. Chobani Fit vanilla" value="${esc(s.q)}" style="flex:3"><button class="btn" style="flex:1" ${s.busy ? 'disabled' : ''}>${s.busy ? '<span class="spin"></span>' : 'Search'}</button></form>
         <label class="note" style="display:flex;gap:8px;align-items:center;margin-bottom:8px"><input type="checkbox" id="auOnly" ${s.auOnly ? 'checked' : ''} style="width:18px;height:18px"> Australian products only</label>${errHtml()}`;
@@ -921,7 +933,7 @@ document.addEventListener('click', async ev => {
       if (!(num(r.servings) > 0)) { sheet.error = 'Enter how many serves it makes.'; renderSheet(); return; }
       const saved = upsertFood({ ...recipeToFood(r), name: r.name.trim(), key: r.key || 'r-' + uid() });
       if (!r.key) Store.set('recipeDraft', null);
-      toast('Recipe saved to My foods');
+      toast('Recipe saved to Recipes'); state.foodsKind = 'recipes'; sheet.tab = 'recipes';
       if (state.tab === 'foods') render();
       showFood(saved, 'tabs'); break;
     }
@@ -966,6 +978,7 @@ document.addEventListener('click', async ev => {
       updateDay(d => ({ ...d, entries: [...d.entries, ...items] }));
       sheet.describeText = ''; sheet.describeRes = []; sheet.mealPhoto = null; closeSheet(); toast(`Added ${items.length} item${items.length > 1 ? 's' : ''}`); break;
     }
+    case 'fkind': state.foodsKind = el.dataset.kind; state.foodsFilter = ''; render(); break;
     case 'open-entry': setView('entry', { entryId: el.dataset.id }); break;
     case 'to-meal': setView('meal'); break;
     case 'move-entry': {
@@ -1050,9 +1063,11 @@ document.addEventListener('submit', async ev => {
 
 document.addEventListener('input', ev => {
   const t = ev.target;
-  if (t.id === 'sheetFilter' || t.id === 'foodsTabFilter') {
+  if (t.id === 'sheetFilter' || t.id === 'foodsTabFilter' || t.id === 'recipeFilter') {
     const pos = t.selectionStart;
-    if (t.id === 'sheetFilter') { sheet.filter = t.value; renderSheet(); } else { state.foodsFilter = t.value; render(); }
+    if (t.id === 'sheetFilter') { sheet.filter = t.value; renderSheet(); }
+    else if (t.id === 'recipeFilter') { sheet.rfilter = t.value; renderSheet(); }
+    else { state.foodsFilter = t.value; render(); }
     const n = $('#' + t.id); n.focus(); try { n.setSelectionRange(pos, pos); } catch {}
   }
   if (t.id === 'rName' || t.id === 'rServ' || t.id === 'rCooked') {
